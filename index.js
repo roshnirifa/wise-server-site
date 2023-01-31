@@ -23,8 +23,11 @@ async function run() {
         await client.connect();
         console.log('db connect');
 
-        const db = client.db("wise-E-commerce")
+        let db = client.db("wise-E-commerce")
         let userDetails = db.collection("usersProfile");
+        let booksDetails = db.collection("booksDetails");
+        let recomendedBooksDetails = db.collection("booksDetails");
+        // const wiseDetails = client.db('jubairPortfolio').collection('wise');
 
 
         // user profile
@@ -34,19 +37,33 @@ async function run() {
             res.send(result);
         });
 
+        //    books on sale detailes
+        app.get('/product', async (req, res) => {
+            const query = {};
+            const options = await booksDetails.find(query).toArray();
+            res.send(options);
+        })
+        app.get('/product/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { id: id };
+            const result = await booksDetails.find(query).toArray();
+            res.send(result);
+        })
+        //   recomemded books  detailes
+        app.get('/product', async (req, res) => {
+            const query = {};
+            const options = await recomendedBooksDetails.find(query).toArray();
+            res.send(options);
+        })
+        app.get('/product/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { id: id };
+            const result = await recomendedBooksDetails.find(query).toArray();
+            res.send(result);
+        })
 
-
-
-
-
-
-
-
-
-
-
-
-    } finally {
+    }
+    finally {
         //   await client.close();
     }
 }
