@@ -25,9 +25,15 @@ async function run() {
 
         let db = client.db("wise-E-commerce")
         let userDetails = db.collection("usersProfile");
-        let booksDetails = db.collection("booksDetails");
-        let recomendedBooksDetails = db.collection("booksDetails");
-        // const wiseDetails = client.db('jubairPortfolio').collection('wise');
+        // let booksDetails = db.collection("booksDetails");
+        // let recomendedBooksDetails = db.collection("booksDetails");
+
+
+        const booksOnSaleDetails = db.collection('booksOnSaleDetails');
+        const recomandDetails = db.collection('recomendedBooks');
+        const cart = db.collection('emailCart');
+        const review = db.collection('review');
+
 
 
         // user profile
@@ -37,30 +43,120 @@ async function run() {
             res.send(result);
         });
 
-        //    books on sale detailes
-        app.get('/product', async (req, res) => {
+
+        ///////////////cart22///////////////
+        app.get('/cart', async (req, res) => {
+            let query = {};
+
+            if (req.query.email) {
+                query = {
+                    email: req.query.email
+                }
+            }
+
+            const cursor = cart.find(query);
+            const orders = await cursor.toArray();
+            res.send(orders);
+        });
+
+        app.post('/cart', async (req, res) => {
+            const order = req.body;
+            const result = await cart.insertOne(order);
+            res.send(result);
+        });
+
+
+        app.delete('/cart/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const result = await cart.deleteOne(query);
+            res.send(result);
+        })
+
+        ///////////////cart22 close///////////////
+
+        /////////////////review///////////////
+
+        app.get('/review', async (req, res) => {
             const query = {};
-            const options = await booksDetails.find(query).toArray();
+            const options = await review.find(query).toArray();
             res.send(options);
         })
+        app.get('/review/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { id: id };
+            const result = await review.find(query).toArray();
+            res.send(result);
+        })
+        app.post('/review', async (req, res) => {
+            const order = req.body;
+            const result = await review.insertOne(order);
+            res.send(result);
+        });
+
+        /////////////////review close///////////////
+
+        /////////////BooksOnSale Details///////////////
+
+        app.get('/product', async (req, res) => {
+            const query = {};
+            const options = await booksOnSaleDetails.find(query).toArray();
+            res.send(options);
+        })
+
+
         app.get('/product/:id', async (req, res) => {
             const id = req.params.id;
             const query = { id: id };
-            const result = await booksDetails.find(query).toArray();
+            const result = await booksOnSaleDetails.find(query).toArray();
             res.send(result);
         })
-        //   recomemded books  detailes
-        app.get('/product', async (req, res) => {
+
+        /////////////BooksOnSale Details close///////////////
+
+
+
+        //////////recomandBooksOnSale /////////////
+        app.get('/recomand', async (req, res) => {
             const query = {};
-            const options = await recomendedBooksDetails.find(query).toArray();
+            const options = await recomandDetails.find(query).toArray();
             res.send(options);
         })
-        app.get('/product/:id', async (req, res) => {
+        app.get('/recomand/:id', async (req, res) => {
             const id = req.params.id;
             const query = { id: id };
-            const result = await recomendedBooksDetails.find(query).toArray();
+            const result = await recomandDetails.find(query).toArray();
             res.send(result);
         })
+
+
+
+
+
+        // //    books on sale detailes
+        // app.get('/product', async (req, res) => {
+        //     const query = {};
+        //     const options = await booksDetails.find(query).toArray();
+        //     res.send(options);
+        // })
+        // app.get('/product/:id', async (req, res) => {
+        //     const id = req.params.id;
+        //     const query = { id: id };
+        //     const result = await booksDetails.find(query).toArray();
+        //     res.send(result);
+        // })
+        // //   recomemded books  detailes
+        // app.get('/product', async (req, res) => {
+        //     const query = {};
+        //     const options = await recomendedBooksDetails.find(query).toArray();
+        //     res.send(options);
+        // })
+        // app.get('/product/:id', async (req, res) => {
+        //     const id = req.params.id;
+        //     const query = { id: id };
+        //     const result = await recomendedBooksDetails.find(query).toArray();
+        //     res.send(result);
+        // })
 
     }
     finally {
