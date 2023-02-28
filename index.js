@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const ObjectId = require('mongodb').ObjectId;
 
 // middleware
 app.use(cors());
@@ -11,29 +13,86 @@ app.use(express.json());
 
 // mongodb connection
 
-
-
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.dtui1ox.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
-
+function verifyJWT(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).send({ message: 'UnAuthorized access' });
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden access' })
+        }
+        req.decoded = decoded;
+        next();
+    });
+}
 async function run() {
     try {
         await client.connect();
         console.log('db connect');
 
         let db = client.db("wise-E-commerce")
+
         let userDetails = db.collection("usersProfile");
-        // let booksDetails = db.collection("booksDetails");
-        // let recomendedBooksDetails = db.collection("booksDetails");
-
-
+        let userCollection = db.collection("users");
         const booksOnSaleDetails = db.collection('booksOnSaleDetails');
         const recomandDetails = db.collection('recomendedBooks');
         const cart = db.collection('emailCart');
         const review = db.collection('review');
+        const purchaseCollection = db.collection("purchase");
 
+
+        // make admin
+        app.get('/admin/:email', async (req, res) => {
+            const email = req.params.email;
+            const user = await userCollection.findOne({ email: email });
+            const isAdmin = user.role === 'admin';
+            res.send({ admin: isAdmin })
+        })
+        app.put('/user/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+
+            const filter = { email: email };
+            const updateDoc = {
+                $set: { role: 'admin' },
+            };
+
+            const result = await userCollection.updateOne(filter, updateDoc,);
+
+            res.send(result);
+
+        })
+
+        // all user
+        app.get('/user', verifyJWT, async (req, res) => {
+            const users = await userCollection.find().toArray();
+            res.send(users);
+        })
+
+
+        app.put('/user/:email', async (req, res) => {
+            const email = req.params.email;
+            const user = req.body;
+            const filter = { email: email };
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: user,
+            };
+            const result = await userCollection.updateOne(filter, updateDoc, options);
+            const token = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            res.send({ result, token });
+        })
+        // make admin
+        // app.get('/admin/:email', async (req, res) => {
+        //     const email = req.params.email;
+        //     const user = await userCollection.findOne({ email: email });
+        //     const isAdmin = user.role === 'admin';
+        //     res.send({ admin: isAdmin })
+        // })
 
 
         // user profile
@@ -44,7 +103,7 @@ async function run() {
         });
 
 
-        ///////////////cart22///////////////
+        // cart calculation
         app.get('/cart', async (req, res) => {
             let query = {};
 
@@ -73,9 +132,8 @@ async function run() {
             res.send(result);
         })
 
-        ///////////////cart22 close///////////////
 
-        /////////////////review///////////////
+        //   review
 
         app.get('/review', async (req, res) => {
             const query = {};
@@ -94,9 +152,9 @@ async function run() {
             res.send(result);
         });
 
-        /////////////////review close///////////////
+        //review close
 
-        /////////////BooksOnSale Details///////////////
+        //BooksOnSale Details
 
         app.get('/product', async (req, res) => {
             const query = {};
@@ -112,11 +170,11 @@ async function run() {
             res.send(result);
         })
 
-        /////////////BooksOnSale Details close///////////////
+        //BooksOnSale Details close
 
 
 
-        //////////recomandBooksOnSale /////////////
+        //recomandBooks
         app.get('/recomand', async (req, res) => {
             const query = {};
             const options = await recomandDetails.find(query).toArray();
@@ -129,34 +187,6 @@ async function run() {
             res.send(result);
         })
 
-
-
-
-
-        // //    books on sale detailes
-        // app.get('/product', async (req, res) => {
-        //     const query = {};
-        //     const options = await booksDetails.find(query).toArray();
-        //     res.send(options);
-        // })
-        // app.get('/product/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { id: id };
-        //     const result = await booksDetails.find(query).toArray();
-        //     res.send(result);
-        // })
-        // //   recomemded books  detailes
-        // app.get('/product', async (req, res) => {
-        //     const query = {};
-        //     const options = await recomendedBooksDetails.find(query).toArray();
-        //     res.send(options);
-        // })
-        // app.get('/product/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { id: id };
-        //     const result = await recomendedBooksDetails.find(query).toArray();
-        //     res.send(result);
-        // })
 
     }
     finally {
