@@ -4,9 +4,9 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const ObjectId = require('mongodb').ObjectId;
-
+// const { MongoClient, ServerApiVersion } = require('mongodb');
+// const ObjectId = require('mongodb').ObjectId;
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // middleware
 app.use(cors());
 app.use(express.json());
@@ -41,9 +41,9 @@ async function run() {
         let userCollection = db.collection("users");
         const booksOnSaleDetails = db.collection('booksOnSaleDetails');
         const recomandDetails = db.collection('recomendedBooks');
-        const cart = db.collection('emailCart');
+        const cart = db.collection('myOrder');
         const review = db.collection('review');
-        const purchaseCollection = db.collection("purchase");
+
 
 
         // make admin
@@ -55,15 +55,21 @@ async function run() {
         })
         app.put('/user/admin/:email', verifyJWT, async (req, res) => {
             const email = req.params.email;
+            const requester = req.decoded.email;
+            const requesterAccount = await userCollection.findOne({ email: requester });
+            if (requesterAccount.role === 'admin') {
+                const filter = { email: email };
+                const updateDoc = {
+                    $set: { role: 'admin' },
+                };
+                const result = await userCollection.updateOne(filter, updateDoc);
+                res.send(result);
+            }
+            else {
+                res.status(403).send({ message: 'forbidden' });
+            }
 
-            const filter = { email: email };
-            const updateDoc = {
-                $set: { role: 'admin' },
-            };
 
-            const result = await userCollection.updateOne(filter, updateDoc,);
-
-            res.send(result);
 
         })
 
@@ -86,13 +92,31 @@ async function run() {
             const token = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
             res.send({ result, token });
         })
-        // make admin
-        // app.get('/admin/:email', async (req, res) => {
-        //     const email = req.params.email;
-        //     const user = await userCollection.findOne({ email: email });
-        //     const isAdmin = user.role === 'admin';
-        //     res.send({ admin: isAdmin })
-        // })
+
+        // ADD PRODUCT
+
+        app.post('/books', async (req, res) => {
+            const addItems = req.body;
+            // console.log(addItems);
+            const result = await recomandDetails.insertOne(addItems);
+
+            res.json(result);
+        });
+
+        app.delete('/delete/:id', async (req, res) => {
+            let id = req.params.id;
+            let query = { _id: ObjectId(id) };
+            let data = await recomandDetails.deleteOne(query);
+            res.send(data);
+        });
+
+        // manage books
+        app.get('/books', async (req, res) => {
+            const books = await recomandDetails.find().toArray();
+            res.send(books);
+
+        });
+
 
 
         // user profile
@@ -156,14 +180,14 @@ async function run() {
 
         //BooksOnSale Details
 
-        app.get('/product', async (req, res) => {
+        app.get('/booksOnSale', async (req, res) => {
             const query = {};
             const options = await booksOnSaleDetails.find(query).toArray();
             res.send(options);
         })
 
 
-        app.get('/product/:id', async (req, res) => {
+        app.get('/booksOnSale/:id', async (req, res) => {
             const id = req.params.id;
             const query = { id: id };
             const result = await booksOnSaleDetails.find(query).toArray();
@@ -174,18 +198,29 @@ async function run() {
 
 
 
-        //recomandBooks
-        app.get('/recomand', async (req, res) => {
+        //recomandBooks details
+
+
+        app.get('/recomandBooks', async (req, res) => {
             const query = {};
             const options = await recomandDetails.find(query).toArray();
             res.send(options);
         })
-        app.get('/recomand/:id', async (req, res) => {
+        app.get('/recomandBooks/:id', async (req, res) => {
             const id = req.params.id;
-            const query = { id: id };
+            const query = { _id: ObjectId(id) };
             const result = await recomandDetails.find(query).toArray();
             res.send(result);
         })
+
+
+        app.post('/recomandBooks', async (req, res) => {
+            const order = req.body;
+            const result = await recomandDetails.insertOne(order);
+            res.send(result);
+        })
+
+
 
 
     }
