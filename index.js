@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const app = express();
 const port = process.env.PORT || 5000;
 // const { MongoClient, ServerApiVersion } = require('mongodb');
@@ -72,6 +74,26 @@ async function run() {
 
 
         })
+
+        // payment
+        app.post('/create-payment-intent', async (req, res) => {
+            const service = req.body;
+            const price = service.price;
+            const amount = price * 100;
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: [
+                    'card'
+                ],
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            })
+        })
+
 
         // all user
         app.get('/user', verifyJWT, async (req, res) => {
@@ -174,7 +196,7 @@ async function run() {
             const order = req.body;
             const result = await review.insertOne(order);
             res.send(result);
-        });
+        });;
 
         //review close
 
@@ -194,12 +216,8 @@ async function run() {
             res.send(result);
         })
 
-        //BooksOnSale Details close
-
-
 
         //recomandBooks details
-
 
         app.get('/recomandBooks', async (req, res) => {
             const query = {};
@@ -219,6 +237,9 @@ async function run() {
             const result = await recomandDetails.insertOne(order);
             res.send(result);
         })
+
+
+
 
 
 
