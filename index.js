@@ -2,10 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const SSLCommerzPayment = require("sslcommerz-lts");
 
 const app = express();
 const port = process.env.PORT || 5000;
+const store_id = process.env.STORE_ID;
+const store_passwd = process.env.STORE_PASSWORD;
+const is_live = false; //true for live, false for sandbox
+
 // const { MongoClient, ServerApiVersion } = require('mongodb');
 // const ObjectId = require('mongodb').ObjectId;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -45,6 +50,7 @@ async function run() {
         const recomandDetails = db.collection('recomendedBooks');
         const cart = db.collection('myOrder');
         const review = db.collection('review');
+        const orders = db.collection('cartOrder');
 
 
 
@@ -76,23 +82,23 @@ async function run() {
         })
 
         // payment
-        app.post('/create-payment-intent', async (req, res) => {
-            const service = req.body;
-            const price = service.price;
-            const amount = price * 100;
+        // app.post('/create-payment-intent', async (req, res) => {
+        //     const service = req.body;
+        //     const price = service.price;
+        //     const amount = price * 100;
 
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: amount,
-                currency: 'usd',
-                payment_method_types: [
-                    'card'
-                ],
-            });
+        //     const paymentIntent = await stripe.paymentIntents.create({
+        //         amount: amount,
+        //         currency: 'usd',
+        //         payment_method_types: [
+        //             'card'
+        //         ],
+        //     });
 
-            res.send({
-                clientSecret: paymentIntent.client_secret,
-            })
-        })
+        //     res.send({
+        //         clientSecret: paymentIntent.client_secret,
+        //     })
+        // })
 
 
         // all user
@@ -170,6 +176,22 @@ async function run() {
             res.send(result);
         });
 
+        // #update cart start
+        app.post('/cart/:id', async (req, res) => {
+            const id = req.params.id;
+
+            const filter = { _id: ObjectId(id) };
+            const options = { new: true };
+            const updatedDoc = {
+                $set: {
+                    subQuantity: req.body.subQuantity,
+                },
+            };
+            const result = await cart.updateOne(filter, updatedDoc);
+            res.send(result);
+        });
+        // #update cart end
+
 
         app.delete('/cart/:id', async (req, res) => {
             const id = req.params.id;
@@ -177,6 +199,110 @@ async function run() {
             const result = await cart.deleteOne(query);
             res.send(result);
         })
+
+
+        ////////////////orderPayment start/////
+        app.get('/orders', async (req, res) => {
+            const query = {};
+            const options = await orders.find(query).toArray();
+            res.send(options);
+        });
+        app.post('/orders', async (req, res) => {
+            const order = req.body;
+
+
+            const transactionId = new ObjectId().toString();
+
+
+            const data = {
+                total_amount: order.totalPrice,
+                currency: order.currency,
+                tran_id: transactionId, // use unique tran_id for each api call
+                success_url: `${process.env.SERVER_URL}/payment/success?transactionId=${transactionId}`,
+                fail_url: `${process.env.SERVER_URL}/payment/fail?transactionId=${transactionId}`,
+                cancel_url: `${process.env.SERVER_URL}/payment/cancel`,
+                ipn_url: "http://localhost:3030/ipn",
+                shipping_method: "Courier",
+                product_name: "Computer.",
+                product_category: "Electronic",
+                product_profile: "general",
+                cus_name: order.customer,
+                cus_email: order.email,
+                cus_add1: order.address,
+                cus_add2: "Dhaka",
+                cus_city: "Dhaka",
+                cus_state: "Dhaka",
+                cus_postcode: "1000",
+                cus_country: "Bangladesh",
+                cus_phone: "01711111111",
+                cus_fax: "01711111111",
+                ship_name: "Customer Name",
+                ship_add1: "Dhaka",
+                ship_add2: "Dhaka",
+                ship_city: "Dhaka",
+                ship_state: "Dhaka",
+                ship_postcode: order.postcode,
+                ship_country: "Bangladesh",
+            };
+
+            const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+            sslcz.init(data).then((apiResponse) => {
+                // Redirect the user to payment gateway
+                let GatewayPageURL = apiResponse.GatewayPageURL;
+                console.log(apiResponse);
+                orders.insertOne({
+                    ...order,
+                    price: order.totalPrice,
+                    transactionId,
+                    paid: false,
+                });
+                res.send({ url: GatewayPageURL });
+            });
+
+
+        });
+        // app.post('/orders', async (req, res) => {
+        //     const order = req.body;
+        //     const result = await orders.insertOne(order);
+        //     res.send(result);
+        // });;
+
+        app.post("/payment/success", async (req, res) => {
+            const { transactionId } = req.query;
+
+            if (!transactionId) {
+                return res.redirect(`${process.env.CLIENT_URL}/payment/fail`);
+            }
+
+            const result = await orders.updateOne(
+                { transactionId },
+                { $set: { paid: true, paidAt: new Date() } }
+            );
+
+            if (result.modifiedCount > 0) {
+                res.redirect(`${process.env.CLIENT_URL}/payment/success?transactionId=${transactionId}`);
+            }
+        });
+
+        app.post("/payment/fail", async (req, res) => {
+            const { transactionId } = req.query;
+            if (!transactionId) {
+                return res.redirect(`${process.env.CLIENT_URL}/payment/fail`);
+            }
+            const result = await orders.deleteOne({ transactionId });
+            if (result.deletedCount) {
+                res.redirect(`${process.env.CLIENT_URL}/payment/fail`);
+            }
+        });
+
+        app.get("/orders/by-transaction-id/:id", async (req, res) => {
+            const { id } = req.params;
+            const order = await orders.findOne({ transactionId: id });
+            console.log(id, order);
+            res.send(order);
+        });
+        ////////////////orderPayment end/////
+
 
 
         //   review
